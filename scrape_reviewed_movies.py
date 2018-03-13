@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import urllib2
+import httplib
 import pandas as pd
 import time
 import ssl
@@ -17,10 +18,10 @@ def fetch_soup(url, try_num = 1):
 	try:
 		con = urllib2.urlopen(req, timeout = 2)
 		result = BeautifulSoup(con, "lxml")
-	except urllib2.URLError as e:
+	except (urllib2.URLError, httplib.IncompleteRead) as e:
+		print("URLError or IncompleteRead: " + url + " " + str(e))
 		time.sleep(10)
-		print("URLError: " + url + " " + str(e))
-		if (try_num >= 20):
+		if (try_num >= 100):
 			raise ValueError("Too many URL errors. Stopping.")
 		else:
 			try_num += 1
@@ -39,8 +40,12 @@ def scrape_table_data(soup, reviews_dict):
 	for row in table:
 		cells = row.find_all("td")
 		col_1 = cells[0].find("span")
-		critic_meter_score = col_1.get("class")[2]
-		critic_rating = col_1.get("title").strip()
+		if col_1 is not None:
+			critic_meter_score = col_1.get("class")[2]
+			critic_rating = col_1.get("title").strip()
+		else:
+			critic_meter_score = None
+			critic_rating = None
 		# -- skip 2nd column in html (movie aggregate rating)
 		col_2 = cells[2]
 		movie_id = col_2.find("a").get("href").replace("/m/", "")
@@ -58,10 +63,17 @@ def scrape_table_data(soup, reviews_dict):
 
 	return(reviews_dict)
 
+
 reviews_dict = {"critic_id" : [], "critic_meter_score" : [],
 				"critic_rating" : [], "movie_id" : [], "movie_title" : [],
 				"movie_review_blurb": []}
+
+# critic_id = "dave-white"
 ind = 0
+
+# print(scrape_table_data(fetch_soup("https://www.rottentomatoes.com/critic/dave-white/movies?page=38"), reviews_dict))
+
+
 for i in range(len(critics_df["critic_id"])):
 	critic_id = critics_df.iloc[i]["critic_id"]
 	ids = [critic_id, critics_df.iloc[i]["critic_id_2"],
@@ -85,6 +97,6 @@ for i in range(len(critics_df["critic_id"])):
 				"critic_rating" : [], "movie_id" : [], "movie_title" : [],
 				"movie_review_blurb": []}
 
-# reviews_df = pd.DataFrame(reviews_dict).sort_values(["critic_id"])
-# reviews_df.to_csv("data/reviews.csv", index = False, encoding = "utf-8")
+reviews_df = pd.DataFrame(reviews_dict).sort_values(["critic_id"])
+reviews_df.to_csv("data/reviews.csv", index = False, encoding = "utf-8")
 
